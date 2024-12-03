@@ -10,10 +10,18 @@
 Due to memory allocation issues the data is not tunnelling properly between function.
 The username for example went wrong from fetch_data function in fetch_data.c to store_html_response function in db.c
 ```
-- Webkiosk picking static files from folder and text/html from DB and sending the response
+- Correct memory garbage value issues
+- Add logic of fetching and returning mongo data otherwise creating data and sending appropriate responses
+- Test using command line arguments like pass roll number and password, store cookie in db, select service and dislpay html response using cookie from db.
+- Make application as a service so other applications can communicate with this one
+- Setup Go Backend for test purpose
+- Test(1) - Pass Credentials and show HomePage
+- Test(2) - Show Student Info Page
+- Setup Frontend Service in a dummy manner to test working
+- Connect APIs
+- Setup Auth and use JWT tokens to maintain sessions
+- 
 - Make deamon service to keep on updating the webkiosk data in DB
-- Show last updated time on webkiosk
-- HOST on webkiosk.singhropar.com
 
 ## Build Process
 - Make a .env file with params 
