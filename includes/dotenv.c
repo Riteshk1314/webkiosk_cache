@@ -12,9 +12,7 @@ void load_env(const char *filename) {
 
     char line[256];
     while (fgets(line, sizeof(line), file)) {
-        // Remove trailing newline
         line[strcspn(line, "\n")] = '\0';
-        // Split line into key and value
         char *delimiter = strchr(line, '=');
         if (delimiter) {
             *delimiter = '\0';
