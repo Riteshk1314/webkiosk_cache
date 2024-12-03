@@ -26,8 +26,7 @@ The username for example went wrong from fetch_data function in fetch_data.c to 
 ## Build Process
 - Make a .env file with params 
 ```
-USERNAME=<username>
-PASSWORD=<password>
+MONGO_URI=<connection string>
 ```
 
 - Run ``` make ``` command and then ```./main```
