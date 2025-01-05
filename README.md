@@ -30,4 +30,3 @@ MONGO_URI=<connection string>
 ```
 - make ```test``` database with collections ```signin``` and ```html_responses```
 - Run ``` make ``` command and then ```./main```
-
