@@ -20,7 +20,6 @@ The username for example went wrong from fetch_data function in fetch_data.c to 
 - Setup Frontend Service in a dummy manner to test working
 - Connect APIs
 - Setup Auth and use JWT tokens to maintain sessions
-- 
 - Make deamon service to keep on updating the webkiosk data in DB
 
 ## Build Process
