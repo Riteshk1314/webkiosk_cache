@@ -9,6 +9,9 @@
 ```
 Due to memory allocation issues the data is not tunnelling properly between function.
 The username for example went wrong from fetch_data function in fetch_data.c to store_html_response function in db.c
+
+The mongo cursor was being destroyed hence username and password would become dangling in main when sent out of scope to fetch_data.c. 
+Current solution implements a copy of username and password to preserve scope.
 ```
 - Correct memory garbage value issues
 - Add logic of fetching and returning mongo data otherwise creating data and sending appropriate responses
