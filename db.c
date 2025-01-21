@@ -61,10 +61,10 @@ bool get_mongo_credentials(const char **username, const char **password) {
     if (mongoc_cursor_next(cursor, &doc)) {
         if (bson_iter_init(&iter, doc)) {
             if (bson_iter_find(&iter, "username")) {
-                *username = bson_iter_utf8(&iter, NULL);
+                *username = strdup(bson_iter_utf8(&iter, NULL));
             }
             if (bson_iter_find(&iter, "password")) {
-                *password = bson_iter_utf8(&iter, NULL);
+                *password = strdup(bson_iter_utf8(&iter, NULL));
                 result = true;
             }
         }
