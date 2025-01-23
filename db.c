@@ -44,6 +44,7 @@ bool get_mongo_credentials(const char **username, const char **password) {
     mongoc_cursor_t *cursor;
     bson_iter_t iter;
     bool result = false;
+    bson_t *new_doc;
 
     load_env(".env");
 
@@ -71,7 +72,16 @@ bool get_mongo_credentials(const char **username, const char **password) {
         printf("Username: %s\n", *username);
         printf("Password: %s\n", *password);
     } else {
-        fprintf(stderr, "No credentials found in MongoDB collection.\n");
+        fprintf(stderr,"Credentials not found, Inserting...\n");
+        new_doc=bson_new();
+        BSON_APPEND_UTF8(new_doc,"username", *username);
+        BSON_APPEND_UTF8(new_doc, "password", *password);
+        if(!mongoc_collection_insert_one(collection, new_doc ,NULL, NULL, NULL)){
+            fprintf(stderr, "failed in insert creds\n");
+        }
+        printf("Insertion successfull\n");
+        result=true;
+        bson_destroy(new_doc);
     }
 
     mongoc_cursor_destroy(cursor);
