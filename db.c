@@ -36,7 +36,7 @@ char *convert_to_utf8(const char *input) {
     return output;
 }
 
-bool get_mongo_credentials(const char **username, const char **password) {
+bool get_mongo_credentials(char **username, char **password) {
     mongoc_client_t *client;
     mongoc_collection_t *collection;
     bson_t query;
