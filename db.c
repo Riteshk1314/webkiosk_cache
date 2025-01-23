@@ -174,40 +174,41 @@ bool get_mongo_credentials(char **username, char **password)
             }
             free(db_password);
         }
+
         else
         {
-            printf("Username not found. Adding user to the database.\n");
-            if (check_cred_webkiosk(username, password))
+            printf("\033[0;31mIncorrect Password\033[0m\n");
+            result = false;
+        }
+    }
+    else
+    {
+        printf("Username not found. Adding user to the database.\n");
+        if (check_cred_webkiosk(username, password))
+        {
+            new_doc = bson_new();
+            bson_oid_t oid;
+            bson_oid_init(&oid, NULL);
+            BSON_APPEND_OID(new_doc, "_id", &oid);
+            BSON_APPEND_UTF8(new_doc, "username", *username);
+            BSON_APPEND_UTF8(new_doc, "password", *password);
+
+            if (!mongoc_collection_insert_one(collection, new_doc, NULL, NULL, &error))
             {
-                new_doc = bson_new();
-                bson_oid_t oid;
-                bson_oid_init(&oid, NULL);
-                BSON_APPEND_OID(new_doc, "_id", &oid);
-                BSON_APPEND_UTF8(new_doc, "username", *username);
-                BSON_APPEND_UTF8(new_doc, "password", *password);
 
-                if (!mongoc_collection_insert_one(collection, new_doc, NULL, NULL, &error))
-                {
-
-                    fprintf(stderr, "%s\n", error.message);
-                }
-                else
-                {
-                    printf("New user added successfully.\n");
-                    result = true;
-                }
-                bson_destroy(new_doc);
+                fprintf(stderr, "%s\n", error.message);
             }
             else
             {
-                printf("\033[0;31mIncorrect Password\033[0m\n");
-                result = false;
+                printf("New user added successfully.\n");
+                result = true;
             }
+            bson_destroy(new_doc);
         }
-        mongoc_cursor_destroy(cursor);
-        mongoc_collection_destroy(collection);
-        mongoc_client_destroy(client);
     }
+    mongoc_cursor_destroy(cursor);
+    mongoc_collection_destroy(collection);
+    mongoc_client_destroy(client);
     return result;
 }
 void store_html_response(const char *response_html, const char *object_id)
