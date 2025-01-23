@@ -109,24 +109,16 @@ bool get_mongo_credentials(char **username, char **password)
     bson_t *new_doc;
     load_env(".env");
 
-    // const char *str = getenv("MONGO_URI");
-    // if (str == NULL) {
-    //     fprintf(stderr, "MONGO_URI environment variable not set.\n");
-    //     return false;
-    // }else{
-    //     printf("Mongo URI: %s\n", str);
-    // }
-
     mongoc_init();
     client = mongoc_client_new(getenv("MONGO_URI"));
     if (!client)
     {
-        fprintf(stderr, "Failed to initialize MongoDB client.\n");
+        fprintf(stderr, "\033[0;31mFailed to initialize MongoDB client.\033[0m\n");
         return false;
     }
     else
     {
-        printf("Mongo client initialized\n");
+        printf("\033[0;32mMongo client initialized\033[0m\n");
     }
     mongoc_client_set_appname(client, "");
 
@@ -140,7 +132,6 @@ bool get_mongo_credentials(char **username, char **password)
     printf("Querying MongoDB for credentials for %s\n", *username);
     if (mongoc_cursor_next(cursor, &doc))
     {
-        // printf("found a user with the same name");
         if (bson_iter_init_find(&iter, doc, "password") && BSON_ITER_HOLDS_UTF8(&iter))
         {
             char *db_password = strdup(bson_iter_utf8(&iter, NULL));
@@ -157,7 +148,7 @@ bool get_mongo_credentials(char **username, char **password)
                     bson_t *update = BCON_NEW("$set", "{", "password", BCON_UTF8(*password), "}");
                     if (!mongoc_collection_update_one(collection, query, update, NULL, NULL, &error))
                     {
-                        fprintf(stderr, "%s\n", error.message);
+                        fprintf(stderr, "\033[0;31m%s\033[0m\n", error.message);
                     }
                     else
                     {
@@ -174,7 +165,6 @@ bool get_mongo_credentials(char **username, char **password)
             }
             free(db_password);
         }
-
         else
         {
             printf("\033[0;31mIncorrect Password\033[0m\n");
@@ -183,7 +173,7 @@ bool get_mongo_credentials(char **username, char **password)
     }
     else
     {
-        printf("Username not found. Adding user to the database.\n");
+        printf("\033[0;33mUsername not found. Adding user to the database.\033[0m\n");
         if (check_cred_webkiosk(username, password))
         {
             new_doc = bson_new();
@@ -195,12 +185,11 @@ bool get_mongo_credentials(char **username, char **password)
 
             if (!mongoc_collection_insert_one(collection, new_doc, NULL, NULL, &error))
             {
-
-                fprintf(stderr, "%s\n", error.message);
+                fprintf(stderr, "\033[0;31m%s\033[0m\n", error.message);
             }
             else
             {
-                printf("New user added successfully.\n");
+                printf("\033[0;32mNew user added successfully.\033[0m\n");
                 result = true;
             }
             bson_destroy(new_doc);
@@ -211,6 +200,7 @@ bool get_mongo_credentials(char **username, char **password)
     mongoc_client_destroy(client);
     return result;
 }
+
 void store_html_response(const char *response_html, const char *object_id)
 {
     mongoc_client_t *client;
@@ -221,7 +211,7 @@ void store_html_response(const char *response_html, const char *object_id)
     client = mongoc_client_new(getenv("MONGO_URI"));
     if (!client)
     {
-        fprintf(stderr, "Failed to initialize MongoDB client.\n");
+        fprintf(stderr, "\033[0;31mFailed to initialize MongoDB client.\033[0m\n");
         return;
     }
 
@@ -229,13 +219,16 @@ void store_html_response(const char *response_html, const char *object_id)
     doc = bson_new();
     BSON_APPEND_UTF8(doc, "username", object_id);
     BSON_APPEND_UTF8(doc, "html", utf8_response);
-    printf("Storing HTML response...\n");
+    printf("\033[0;33mStoring HTML response...\033[0m\n");
 
     if (!mongoc_collection_insert_one(collection, doc, NULL, NULL, NULL))
     {
-        fprintf(stderr, "Failed to store HTML response.\n");
+        fprintf(stderr, "\033[0;31mFailed to store HTML response.\033[0m\n");
     }
-    printf("HTML response stored successfully.\n");
+    else
+    {
+        printf("\033[0;32mHTML response stored successfully.\033[0m\n");
+    }
 
     bson_destroy(doc);
     mongoc_collection_destroy(collection);
