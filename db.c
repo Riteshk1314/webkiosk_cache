@@ -12,55 +12,80 @@
 
 bool check_cred_webkiosk(char **username, char **password)
 {
-    printf("\033[0;33mChecking credentials...\033[0m\n");
-    CURL *curl;
-    CURLcode res;
-    bool result = false;
-    curl_global_init(CURL_GLOBAL_DEFAULT);
-    curl = curl_easy_init();
+    CURL *curl = curl_easy_init();
     if (curl)
     {
-        struct curl_slist *headers = NULL;
-        headers = curl_slist_append(headers, "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/115.0");
-        headers = curl_slist_append(headers, "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8");
-        headers = curl_slist_append(headers, "Accept-Language: en-US,en;q=0.5");
-        headers = curl_slist_append(headers, "Accept-Encoding: gzip, deflate, br");
-        headers = curl_slist_append(headers, "Content-Type: application/x-www-form-urlencoded");
-        headers = curl_slist_append(headers, "Origin: https://webkiosk.thapar.edu");
-        headers = curl_slist_append(headers, "Connection: keep-alive");
-        headers = curl_slist_append(headers, "Referer: https://webkiosk.thapar.edu/index.jsp");
-        headers = curl_slist_append(headers, "Cookie: _gcl_au=1.1.1633298723.1734614119; _ga=GA1.1.1374391389.1734614120; _ga_GJRG3ZQJED=GS1.1.1734614119.1.0.1734614121.58.0.0; _fbp=fb.1.1734614119972.292506922746728699; _ga_5K6V5S5WTM=GS1.1.1734614120.1.1.1734614121.59.0.0; JSESSIONID=533833014989CF09FE58F7AEFDC5BFA5; switchmenu=");
-        headers = curl_slist_append(headers, "Upgrade-Insecure-Requests: 1");
-        headers = curl_slist_append(headers, "Sec-Fetch-Dest: document");
-        headers = curl_slist_append(headers, "Sec-Fetch-Mode: navigate");
-        headers = curl_slist_append(headers, "Sec-Fetch-Site: same-origin");
-        headers = curl_slist_append(headers, "Sec-Fetch-User: ?1");
+        char *url = "https://webkiosk.thapar.edu/CommonFiles/UserAction.jsp";
+        char post_fields[256];
+        snprintf(post_fields, sizeof(post_fields),
+                 "txtuType=Member+Type&UserType=S&txtCode=Enrollment+No&MemberCode=%s&txtPin=Password%%2FPin&Password=%s&BTNSubmit=Submit",
+                 *username, *password);
 
-        char postfields[256];
-        snprintf(postfields, sizeof(postfields), "txtuType=Member+Type&UserType=S&txtCode=Enrollment+No&MemberCode=%s&txtPin=Password%%2FPin&Password=%s&BTNSubmit=Submit", *username, *password);
+        curl_easy_setopt(curl, CURLOPT_URL, url);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, post_fields);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)strlen(post_fields));
+        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 0L); // Do not follow redirects
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NULL);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, NULL);
+        curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L); // Enable verbose output for debugging
 
-        curl_easy_setopt(curl, CURLOPT_URL, "https://webkiosk.thapar.edu/CommonFiles/UserAction.jsp");
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postfields);
+        // Activate cookie handling
+        curl_easy_setopt(curl, CURLOPT_COOKIEFILE, ""); // Enable libcurl's cookie engine
 
-        res = curl_easy_perform(curl);
-        if (res == CURLE_OK)
+        printf("\033[0;33mChecking credentials...\033[0m\n");
+        CURLcode res = curl_easy_perform(curl);
+        printf("\033[0;33mResponse ended...\033[0m\n");
+
+        if (res != CURLE_OK)
         {
-            long response_code;
+            fprintf(stderr, "\033[0;31mcurl_easy_perform() failed: %s\033[0m\n", curl_easy_strerror(res));
+        }
+        else
+        {
+            long response_code = 0;
             curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
             if (response_code == 302)
             {
-                result = true;
+                printf("\033[0;34mLogin successful. HTTP response code: %ld\033[0m\n", response_code);
+
+                // Retrieve and parse cookies
+                struct curl_slist *cookies = NULL;
+                struct curl_slist *nc = NULL;
+
+                curl_easy_getinfo(curl, CURLINFO_COOKIELIST, &cookies);
+                nc = cookies;
+                while (nc)
+                {
+                    char *cookie_data = nc->data;
+                    // Look for JSESSIONID
+                    if (strstr(cookie_data, "JSESSIONID"))
+                    {
+                        // Split by tab and extract the last field (JSESSIONID value)
+                        char *token = strtok(cookie_data, "\t");
+                        char *jsessionid = NULL;
+                        while (token)
+                        {
+                            jsessionid = token; // Update jsessionid to the last token
+                            token = strtok(NULL, "\t");
+                        }
+                        printf("\033[0;32mJSESSIONID: %s\033[0m\n", jsessionid);
+                    }
+                    nc = nc->next;
+                }
+
+                curl_slist_free_all(cookies);
+            }
+            else
+            {
+                printf("\033[0;31mLogin failed. HTTP response code: %ld\033[0m\n", response_code);
             }
         }
-
-        curl_slist_free_all(headers);
         curl_easy_cleanup(curl);
+        return true;
     }
-
-    curl_global_cleanup();
-    return result;
+    return false;
 }
+
 
 char *convert_to_utf8(const char *input)
 {
@@ -135,6 +160,7 @@ bool get_mongo_credentials(char **username, char **password)
         if (bson_iter_init_find(&iter, doc, "password") && BSON_ITER_HOLDS_UTF8(&iter))
         {
             char *db_password = strdup(bson_iter_utf8(&iter, NULL));
+            // if password and db_password match
             if (check_cred_webkiosk(username, password))
             {
                 printf("\033[0;32mCredentials are correct.\033[0m\n");
