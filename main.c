@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
 
         if (fetch_data(username, password))
         {
-            printf("Data fetched and stored successfully.\n");
+            printf("\033[0;32mData fetched and stored successfully.\033[0m\n");
         }
         else
         {

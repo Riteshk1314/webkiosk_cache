@@ -32,3 +32,8 @@ MONGO_URI=<connection string>
 ```
 - make ```test``` database with collections ```signin``` and ```html_responses```
 - Run ``` make ``` command and then ```./main```
+
+
+when getMOngo cred is called it verifys the creds stores the jsession cookie and updates accordingly (all done) (even if the original password is changed it checks for that)!
+when fetch_data is called it updates all the html pages for the user that can be used by the go/django server directly for client (incomplete)
+store_html_response should first find the user entry then update the the pages one by one based on names (exam marks,viewsgpa cgpa,etc)

@@ -25,6 +25,23 @@ size_t write_callback(void *ptr, size_t size, size_t nmemb, void *userdata) {
     return total_size;
 }
 
+// void store_html_response(const char *response_html, const char *object_id);
+
+// bool fetch_exam_marks(){
+//     get user 'Cookie: switchmenu=; JSESSIONID=from db and then get then try to get the page from original if down then from db and return the html response
+// }
+// bool fetch_exam_grades(){
+
+// }
+// bool fetch_sgpa_cgpa(){
+
+// }
+
+// bool fetch_data(){
+//     a menu that gives options to choose which page to return;
+// }
+
+
 bool fetch_data(const char *username, const char *password) {
     CURL *curl;
     CURLcode res;
