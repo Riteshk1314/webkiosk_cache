@@ -10,9 +10,17 @@
 
 #include <curl/curl.h>
 
-bool check_cred_webkiosk(char **username, char **password)
+size_t db_write_callback(void *contents, size_t size, size_t nmemb, void *userp)
+{
+    size_t total_size = size * nmemb;
+    strncat((char *)userp, (char *)contents, total_size);
+    return total_size;
+}
+
+char *check_cred_webkiosk(char **username, char **password)
 {
     CURL *curl = curl_easy_init();
+    char *jsessionid = NULL;
     if (curl)
     {
         char *url = "https://webkiosk.thapar.edu/CommonFiles/UserAction.jsp";
@@ -25,8 +33,10 @@ bool check_cred_webkiosk(char **username, char **password)
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, post_fields);
         curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)strlen(post_fields));
         curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 0L); // Do not follow redirects
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NULL);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, NULL);
+
+        char response_data[4096] = {0};
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, db_write_callback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, response_data);
         curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L); // Enable verbose output for debugging
 
         // Activate cookie handling
@@ -62,18 +72,23 @@ bool check_cred_webkiosk(char **username, char **password)
                     {
                         // Split by tab and extract the last field (JSESSIONID value)
                         char *token = strtok(cookie_data, "\t");
-                        char *jsessionid = NULL;
                         while (token)
                         {
                             jsessionid = token; // Update jsessionid to the last token
                             token = strtok(NULL, "\t");
                         }
-                        printf("\033[0;32mJSESSIONID: %s\033[0m\n", jsessionid);
+                        // printf("\033[0;32mJSESSIONID: %s\033[0m\n", jsessionid);
+                        jsessionid = strdup(jsessionid); // Duplicate the JSESSIONID value
+                        break;
                     }
                     nc = nc->next;
                 }
 
                 curl_slist_free_all(cookies);
+            }
+            else if (response_code == 200 && strstr(response_data, "Invalid Username/Password"))
+            {
+                printf("\033[0;31mLogin failed. Invalid Username/Password.\033[0m\n");
             }
             else
             {
@@ -81,11 +96,57 @@ bool check_cred_webkiosk(char **username, char **password)
             }
         }
         curl_easy_cleanup(curl);
-        return true;
     }
-    return false;
+
+    return jsessionid;
 }
 
+bool save_db(char* username, char* password, char* cookie){
+    mongoc_client_t *client;
+    mongoc_collection_t *collection;
+    bson_t *query;
+    bson_t *update;
+    bson_error_t error;
+    bool result = false;
+
+    mongoc_init();
+    client = mongoc_client_new(getenv("MONGO_URI"));
+    if (!client)
+    {
+        fprintf(stderr, "\033[0;31mFailed to initialize MongoDB client.\033[0m\n");
+        return false;
+    }
+
+    collection = mongoc_client_get_collection(client, "webKiosk", "signin");
+
+    query = bson_new();
+    BSON_APPEND_UTF8(query, "username", username);
+
+    update = BCON_NEW(
+        "$set", "{",
+            "password", BCON_UTF8(password),
+            "JSESSIONID", BCON_UTF8(cookie),
+        "}"
+    );
+
+    if (!mongoc_collection_update_one(collection, query, update, NULL, NULL, &error))
+    {
+        fprintf(stderr, "\033[0;31mFailed to update cookie: %s\033[0m\n", error.message);
+    }
+    else
+    {
+        printf("\033[0;32mCookie updated successfully.\033[0m\n");
+        result = true;
+    }
+
+    bson_destroy(query);
+    bson_destroy(update);
+    mongoc_collection_destroy(collection);
+    mongoc_client_destroy(client);
+    mongoc_cleanup();
+
+    return result;
+}
 
 char *convert_to_utf8(const char *input)
 {
@@ -154,53 +215,52 @@ bool get_mongo_credentials(char **username, char **password)
     BSON_APPEND_UTF8(query, "username", *username);
     cursor = mongoc_collection_find_with_opts(collection, query, NULL, NULL);
 
-    printf("Querying MongoDB for credentials for %s\n", *username);
+    printf("\033[0;33mQuerying MongoDB for credentials for %s\033[0m\n", *username);
     if (mongoc_cursor_next(cursor, &doc))
     {
         if (bson_iter_init_find(&iter, doc, "password") && BSON_ITER_HOLDS_UTF8(&iter))
         {
             char *db_password = strdup(bson_iter_utf8(&iter, NULL));
-            // if password and db_password match
-            if (check_cred_webkiosk(username, password))
+            if (strcmp(db_password, *password) == 0)
             {
-                printf("\033[0;32mCredentials are correct.\033[0m\n");
-                if (strcmp(*password, db_password) == 0)
-                {
-                    printf("\033[0;32mPasswords match.\033[0m\n");
-                    result = true;
-                }
-                else
-                {
-                    bson_t *update = BCON_NEW("$set", "{", "password", BCON_UTF8(*password), "}");
-                    if (!mongoc_collection_update_one(collection, query, update, NULL, NULL, &error))
-                    {
-                        fprintf(stderr, "\033[0;31m%s\033[0m\n", error.message);
-                    }
-                    else
-                    {
-                        printf("\033[0;32mPassword updated successfully in DB.\033[0m\n");
-                        result = true;
-                    }
-                    bson_destroy(update);
-                }
+                printf("\033[0;32mCorrect Password\033[0m\n");
+                result = true;
             }
             else
             {
-                printf("\033[0;31mIncorrect Password\033[0m\n");
-                result = false;
+                char *cookie = check_cred_webkiosk(username, password);
+                if (cookie)
+                {
+                    if (save_db(*username, *password, cookie))
+                    {
+                        printf("\033[0;32mCorrect Password and Updated DB\033[0m\n");
+                        result = true;
+                    }
+                    else
+                    {
+                        printf("\033[0;31mFailed to save cookie to database\033[0m\n");
+                        result = false;
+                    }
+                }
+                else
+                {
+                    printf("\033[0;31mIncorrect Password\033[0m\n");
+                    result = false;
+                }
             }
             free(db_password);
         }
         else
         {
-            printf("\033[0;31mIncorrect Password\033[0m\n");
+            printf("\033[0;31mPassword not found in database\033[0m\n");
             result = false;
         }
     }
     else
     {
         printf("\033[0;33mUsername not found. Adding user to the database.\033[0m\n");
-        if (check_cred_webkiosk(username, password))
+        char *cookie = check_cred_webkiosk(username, password);
+        if (cookie)
         {
             new_doc = bson_new();
             bson_oid_t oid;
@@ -208,10 +268,11 @@ bool get_mongo_credentials(char **username, char **password)
             BSON_APPEND_OID(new_doc, "_id", &oid);
             BSON_APPEND_UTF8(new_doc, "username", *username);
             BSON_APPEND_UTF8(new_doc, "password", *password);
+            BSON_APPEND_UTF8(new_doc, "JSESSIONID", cookie);
 
             if (!mongoc_collection_insert_one(collection, new_doc, NULL, NULL, &error))
             {
-                fprintf(stderr, "\033[0;31m%s\033[0m\n", error.message);
+                fprintf(stderr, "\033[0;31mFailed to insert new user: %s\033[0m\n", error.message);
             }
             else
             {
@@ -219,11 +280,18 @@ bool get_mongo_credentials(char **username, char **password)
                 result = true;
             }
             bson_destroy(new_doc);
+            free(cookie); // Free the allocated memory for cookie
+        }
+        else
+        {
+            printf("\033[0;31mFailed to authenticate new user\033[0m\n");
         }
     }
     mongoc_cursor_destroy(cursor);
+    bson_destroy(query);
     mongoc_collection_destroy(collection);
     mongoc_client_destroy(client);
+    mongoc_cleanup();
     return result;
 }
 
